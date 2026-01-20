@@ -1,18 +1,26 @@
-//import {Greet} from "../wailsjs/go/main/App";
+import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { ThemeProvider } from "@/components/theme-provider"
-import { ModeToggle } from "./components/mode-toogle"
+import { AppLayout } from "@/components/layout/AppLayout"
+import Home from "@/pages/Home"
+import TextDiff from "@/pages/TextDiff"
+import JsonUtils from "@/pages/JsonUtils"
+import EpochTools from "@/pages/EpochTools"
 
 function App() {
-    return (
-         <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-            <ModeToggle/>
-
-        <h1 className="text-3xl font-bold underline">
-    Hello world!
-  </h1>
+  return (
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<AppLayout />}>
+            <Route index element={<Home />} />
+            <Route path="text-diff" element={<TextDiff />} />
+            <Route path="json-utils" element={<JsonUtils />} />
+            <Route path="epoch-tools" element={<EpochTools />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     </ThemeProvider>
-       
-    )
+  )
 }
 
 export default App
