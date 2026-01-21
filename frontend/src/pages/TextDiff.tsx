@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowLeft, ArrowRight, RefreshCw, GitCompareArrows, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, GitCompareArrows, X } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import * as Diff from "diff"
 
@@ -16,7 +16,7 @@ const STORAGE_KEY_MERGE = "textDiff_mergeText"
 
 interface DiffBlock {
   lineNumber: number
-  type: "added" | "removed" | "modified" | "unchanged"
+  type: "added" | "removed" | "conflict" | "unchanged"
   leftContent: string
   rightContent: string
   resolved: boolean
@@ -36,7 +36,7 @@ export default function TextDiff() {
   })
   const [isComparing, setIsComparing] = useState(false)
   const [diffBlocks, setDiffBlocks] = useState<DiffBlock[]>([])
-  const [inputMode, setInputMode] = useState<"plaintext" | "json" | "code">("plaintext")
+  const [inputMode, setInputMode] = useState<"plaintext" | "json">("plaintext")
 
   const getMonacoTheme = () => {
     if (theme === "system") {
@@ -58,44 +58,70 @@ export default function TextDiff() {
   }, [mergeText])
 
   const computeDiff = () => {
+    const leftLines = leftText.split("\n")
+    const rightLines = rightText.split("\n")
     const diff = Diff.diffLines(leftText, rightText)
     const blocks: DiffBlock[] = []
-    let lineNumber = 0
+    
+    let leftIndex = 0
+    let rightIndex = 0
 
     diff.forEach((part) => {
-      const lines = part.value.split("\n").filter((l) => l !== "")
+      const lines = part.value.split("\n").filter((l, i, arr) => {
+        // Keep empty lines except the last one if it's empty
+        return i < arr.length - 1 || l !== ""
+      })
+
       lines.forEach((line) => {
-        lineNumber++
-        if (part.added) {
+        if (!part.added && !part.removed) {
+          // Unchanged line
           blocks.push({
-            lineNumber,
-            type: "added",
-            leftContent: "",
-            rightContent: line,
-            resolved: false,
-            acceptedSide: "none",
-          })
-        } else if (part.removed) {
-          blocks.push({
-            lineNumber,
-            type: "removed",
-            leftContent: line,
-            rightContent: "",
-            resolved: false,
-            acceptedSide: "none",
-          })
-        } else {
-          blocks.push({
-            lineNumber,
+            lineNumber: blocks.length + 1,
             type: "unchanged",
             leftContent: line,
             rightContent: line,
             resolved: true,
             acceptedSide: "both",
           })
+          leftIndex++
+          rightIndex++
+        } else if (part.added) {
+          // Line added in right
+          blocks.push({
+            lineNumber: blocks.length + 1,
+            type: "added",
+            leftContent: "",
+            rightContent: line,
+            resolved: false,
+            acceptedSide: "none",
+          })
+          rightIndex++
+        } else if (part.removed) {
+          // Line removed from left
+          blocks.push({
+            lineNumber: blocks.length + 1,
+            type: "removed",
+            leftContent: line,
+            rightContent: "",
+            resolved: false,
+            acceptedSide: "none",
+          })
+          leftIndex++
         }
       })
     })
+
+    // Detect conflicts: consecutive removed + added = conflict
+    for (let i = 0; i < blocks.length - 1; i++) {
+      const current = blocks[i]
+      const next = blocks[i + 1]
+      
+      if (current.type === "removed" && next.type === "added") {
+        // This is a conflict - same line modified on both sides
+        current.type = "conflict"
+        next.type = "conflict"
+      }
+    }
 
     setDiffBlocks(blocks)
     rebuildMergeText(blocks)
@@ -196,7 +222,6 @@ export default function TextDiff() {
             <TabsList>
               <TabsTrigger value="plaintext">Plain Text</TabsTrigger>
               <TabsTrigger value="json">JSON</TabsTrigger>
-              <TabsTrigger value="code">Code</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -262,20 +287,49 @@ export default function TextDiff() {
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="h-[500px]">
-                  <div className="p-4">
-                    <Editor
-                      height="500px"
-                      language={inputMode === "json" ? "json" : "plaintext"}
-                      value={leftText}
-                      theme={getMonacoTheme()}
-                      options={{
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        fontSize: 13,
-                        lineNumbers: "on",
-                        scrollBeyondLastLine: false,
-                      }}
-                    />
+                  <div className="p-2 pr-14 font-mono text-xs">
+                    {diffBlocks.map((block, index) => {
+                      const getBgClass = () => {
+                        if (block.type === "unchanged") return ""
+                        return "bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500"
+                      }
+
+                      return (
+                        <div
+                          key={index}
+                          className={`relative flex items-start gap-2 py-0.5 px-1 min-h-[20px] ${getBgClass()}`}
+                        >
+                          <span className="text-muted-foreground w-8 text-right shrink-0 text-[10px]">
+                            {block.leftContent ? index + 1 : ""}
+                          </span>
+                          <span className="flex-1">
+                            {block.leftContent || (
+                              <span className="text-muted-foreground/30">·</span>
+                            )}
+                          </span>
+                          
+                          {/* Buttons on the right */}
+                          {block.type !== "unchanged" && !block.resolved && block.leftContent && (
+                            <div className="absolute right-1 top-0.5 flex gap-0.5">
+                              <button
+                                onClick={() => handleRejectLeft(index)}
+                                className="p-0.5 hover:bg-red-500/20 rounded transition-colors bg-background border border-border shadow-sm"
+                                title="Reject"
+                              >
+                                <X className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                              </button>
+                              <button
+                                onClick={() => handleAcceptLeft(index)}
+                                className="p-0.5 hover:bg-blue-500/20 rounded transition-colors bg-background border border-border shadow-sm"
+                                title="Accept to center"
+                              >
+                                <ChevronsRight className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -296,110 +350,92 @@ export default function TextDiff() {
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="h-[500px]">
-                  <div className="p-4 space-y-2">
-                    {diffBlocks.map((block, index) => (
-                      <div
-                        key={index}
-                        className={`relative rounded-md border p-2 ${
-                          block.type === "added"
-                            ? "bg-green-500/10 border-green-500/30"
-                            : block.type === "removed"
-                            ? "bg-red-500/10 border-red-500/30"
-                            : block.resolved
-                            ? "bg-muted/50"
-                            : "bg-yellow-500/10 border-yellow-500/30"
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span className="text-xs text-muted-foreground min-w-[30px]">
-                            {index + 1}
-                          </span>
-                          <div className="flex-1 font-mono text-xs">
-                            {block.resolved ? (
-                              <div>
-                                {block.acceptedSide === "left" && (
-                                  <span className="text-blue-600 dark:text-blue-400">
-                                    ← {block.leftContent}
-                                  </span>
-                                )}
-                                {block.acceptedSide === "right" && (
-                                  <span className="text-purple-600 dark:text-purple-400">
-                                    → {block.rightContent}
-                                  </span>
-                                )}
-                                {block.acceptedSide === "both" && (
-                                  <span>{block.leftContent || block.rightContent}</span>
-                                )}
-                                {block.acceptedSide === "none" && (
-                                  <span className="text-muted-foreground line-through">
-                                    Rejected
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                {block.leftContent && (
-                                  <div className="text-red-600 dark:text-red-400">
-                                    - {block.leftContent}
-                                  </div>
-                                )}
-                                {block.rightContent && (
-                                  <div className="text-green-600 dark:text-green-400">
-                                    + {block.rightContent}
-                                  </div>
-                                )}
-                                <div className="flex gap-1 mt-2">
-                                  {block.leftContent && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 px-2"
-                                        onClick={() => handleAcceptLeft(index)}
-                                        title="Accept left"
-                                      >
-                                        <ArrowLeft className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 px-2"
-                                        onClick={() => handleRejectLeft(index)}
-                                        title="Reject left"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </>
+                  <div className="p-2">
+                    {diffBlocks.map((block, index) => {
+                      const getBlockStyle = () => {
+                        if (block.type === "unchanged") {
+                          return "bg-transparent border-transparent"
+                        } else {
+                          return block.resolved 
+                            ? "bg-muted/50 border-transparent" 
+                            : "bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500"
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={index}
+                          className={`relative flex items-center gap-1 py-0.5 px-1 text-xs font-mono ${getBlockStyle()}`}
+                        >
+                          {/* Left chevrons */}
+                          {block.type !== "unchanged" && !block.resolved && block.leftContent && (
+                            <div className="flex gap-0.5 absolute left-0 -translate-x-full pr-1">
+                              <button
+                                onClick={() => handleAcceptLeft(index)}
+                                className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
+                                title="Accept from left"
+                              >
+                                <ChevronsRight className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                              </button>
+                              <button
+                                onClick={() => handleRejectLeft(index)}
+                                className="p-0.5 hover:bg-red-500/20 rounded transition-colors"
+                                title="Reject"
+                              >
+                                <X className="h-3 w-3 text-muted-foreground hover:text-red-600" />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Content */}
+                          <div className="flex-1 flex items-center gap-2 min-h-[20px]">
+                            <span className="text-muted-foreground w-8 text-right shrink-0 text-[10px]">
+                              {index + 1}
+                            </span>
+                            <span className="flex-1">
+                              {block.resolved ? (
+                                <>
+                                  {block.acceptedSide === "both" && (
+                                    <span>{block.leftContent || block.rightContent}</span>
                                   )}
-                                  {block.rightContent && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 px-2"
-                                        onClick={() => handleAcceptRight(index)}
-                                        title="Accept right"
-                                      >
-                                        <ArrowRight className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 px-2"
-                                        onClick={() => handleRejectRight(index)}
-                                        title="Reject right"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </>
+                                  {block.acceptedSide === "left" && block.leftContent && (
+                                    <span>{block.leftContent}</span>
                                   )}
-                                </div>
-                              </div>
-                            )}
+                                  {block.acceptedSide === "right" && block.rightContent && (
+                                    <span>{block.rightContent}</span>
+                                  )}
+                                  {block.acceptedSide === "none" && (
+                                    <span className="text-muted-foreground/30">·</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground/30">·</span>
+                              )}
+                            </span>
                           </div>
+
+                          {/* Right chevrons */}
+                          {block.type !== "unchanged" && !block.resolved && block.rightContent && (
+                            <div className="flex gap-0.5 absolute right-0 translate-x-full pl-1">
+                              <button
+                                onClick={() => handleRejectRight(index)}
+                                className="p-0.5 hover:bg-red-500/20 rounded transition-colors"
+                                title="Reject"
+                              >
+                                <X className="h-3 w-3 text-muted-foreground hover:text-red-600" />
+                              </button>
+                              <button
+                                onClick={() => handleAcceptRight(index)}
+                                className="p-0.5 hover:bg-green-500/20 rounded transition-colors"
+                                title="Accept from right"
+                              >
+                                <ChevronsLeft className="h-3 w-3 text-green-600 dark:text-green-400" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -409,26 +445,57 @@ export default function TextDiff() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-purple-500"></span>
+                  <span className="h-3 w-3 rounded-full bg-green-500"></span>
                   Modified (Right)
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="h-[500px]">
-                  <div className="p-4">
-                    <Editor
-                      height="500px"
-                      language={inputMode === "json" ? "json" : "plaintext"}
-                      value={rightText}
-                      theme={getMonacoTheme()}
-                      options={{
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        fontSize: 13,
-                        lineNumbers: "on",
-                        scrollBeyondLastLine: false,
-                      }}
-                    />
+                  <div className="p-2 pl-2 font-mono text-xs">
+                    {diffBlocks.map((block, index) => {
+                      const getBgClass = () => {
+                        if (block.type === "unchanged") return ""
+                        return "bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500"
+                      }
+
+                      return (
+                        <div
+                          key={index}
+                          className={`relative flex items-start gap-2 py-0.5 px-1 min-h-[20px] ${getBgClass()}`}
+                        >
+                          {/* Buttons on the left - fixed position */}
+                          <div className="w-8 shrink-0 flex items-center justify-start gap-0.5">
+                            {block.type !== "unchanged" && !block.resolved && block.rightContent && (
+                              <>
+                                <button
+                                  onClick={() => handleAcceptRight(index)}
+                                  className="p-0.5 hover:bg-green-500/20 rounded transition-colors bg-background border border-border shadow-sm"
+                                  title="Accept to center"
+                                >
+                                  <ChevronsLeft className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                                </button>
+                                <button
+                                  onClick={() => handleRejectRight(index)}
+                                  className="p-0.5 hover:bg-red-500/20 rounded transition-colors bg-background border border-border shadow-sm"
+                                  title="Reject"
+                                >
+                                  <X className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          
+                          <span className="text-muted-foreground w-8 text-right shrink-0 text-[10px]">
+                            {block.rightContent ? index + 1 : ""}
+                          </span>
+                          <span className="flex-1">
+                            {block.rightContent || (
+                              <span className="text-muted-foreground/30">·</span>
+                            )}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </ScrollArea>
               </CardContent>
