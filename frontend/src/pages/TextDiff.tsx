@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, GitCompareArrows, X } from "lucide-react"
+import { ChevronsLeft, ChevronsRight, RefreshCw, GitCompareArrows, X } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import * as Diff from "diff"
 
@@ -58,8 +58,6 @@ export default function TextDiff() {
   }, [mergeText])
 
   const computeDiff = () => {
-    const leftLines = leftText.split("\n")
-    const rightLines = rightText.split("\n")
     const diff = Diff.diffLines(leftText, rightText)
     const blocks: DiffBlock[] = []
     

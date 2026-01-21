@@ -29,11 +29,9 @@ export function AppLayout() {
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="border-b px-6 py-4">
-          <h2 className="text-lg font-semibold">Modern Tools</h2>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Tools</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => {

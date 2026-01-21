@@ -5,10 +5,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, Copy, RefreshCw } from "lucide-react"
+import { Clock, Copy } from "lucide-react"
 
 type TimeUnit = "seconds" | "milliseconds" | "nanoseconds"
-type TimezoneOffset = number
 
 const TIMEZONES = [
   { label: "GMT-12:00", offset: -12 },
@@ -49,7 +48,7 @@ export default function EpochTools() {
   const [dateInputMode, setDateInputMode] = useState<"text" | "separated">("text")
   const [dateInput, setDateInput] = useState("")
   const [dateTimezone, setDateTimezone] = useState<number>(-new Date().getTimezoneOffset() / 60)
-  const [dateOutputUnit, setDateOutputUnit] = useState<TimeUnit>("seconds")
+
   
   // Separated date inputs
   const now = new Date()
