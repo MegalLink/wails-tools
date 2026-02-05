@@ -144,15 +144,15 @@ function computeLineDiff(oldText: string, newText: string): DiffLine[] {
       }
 
       if (!foundMatch) {
-        // No match found - mark as modified
+        // No match found - old line removed, new line added
         result.push({
-          type: "modified",
+          type: "removed",
           oldLineNumber: oldIndex + 1,
-          newLineNumber: newIndex + 1,
+          newLineNumber: null,
           content: oldLine,
         })
         result.push({
-          type: "modified",
+          type: "added",
           oldLineNumber: null,
           newLineNumber: newIndex + 1,
           content: newLine,
