@@ -10,15 +10,17 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarInset,
+  SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toogle"
-import { Home, FileText, Clock, Braces } from "lucide-react"
+import { Home, FileText, Clock, Braces, Code } from "lucide-react"
 
 const navItems = [
   { title: "Home", path: "/", icon: Home },
   { title: "Text Diff", path: "/text-diff", icon: FileText },
   { title: "JSON Utils", path: "/json-utils", icon: Braces },
   { title: "Epoch Tools", path: "/epoch-tools", icon: Clock },
+  { title: "Code Editor", path: "/code-editor", icon: Code },
 ]
 
 export function AppLayout() {
@@ -54,9 +56,12 @@ export function AppLayout() {
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 items-center justify-between border-b px-6">
-          <h1 className="text-xl font-semibold">
-            {navItems.find((item) => item.path === location.pathname)?.title || "Modern Tools"}
-          </h1>
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <h1 className="text-xl font-semibold">
+              {navItems.find((item) => item.path === location.pathname)?.title || "Modern Tools"}
+            </h1>
+          </div>
           <ModeToggle />
         </header>
         <main className="flex-1 overflow-auto p-6">

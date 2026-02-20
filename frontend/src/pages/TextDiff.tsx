@@ -303,7 +303,7 @@ export default function TextDiff() {
               <CardContent>
                 <div className="border rounded-md overflow-hidden">
                   <Editor
-                    height="400px"
+                    height="65vh"
                     defaultLanguage="plaintext"
                     language={isLeftJSON ? "json" : "plaintext"}
                     value={leftText}
@@ -338,7 +338,7 @@ export default function TextDiff() {
               <CardContent>
                 <div className="border rounded-md overflow-hidden">
                   <Editor
-                    height="400px"
+                    height="65vh"
                     defaultLanguage="plaintext"
                     language={isRightJSON ? "json" : "plaintext"}
                     value={rightText}
@@ -412,7 +412,7 @@ export default function TextDiff() {
                 <div className="grid grid-cols-2 divide-x">
                   <div>
                     <div className="bg-muted px-4 py-2 font-semibold text-sm">Original</div>
-                    <div className="overflow-auto max-h-[600px]">
+                    <div className="overflow-auto max-h-[70vh]">
                       {diffLines
                         .filter((line) => line.oldLineNumber !== null)
                         .map((line, idx) => (
@@ -429,7 +429,7 @@ export default function TextDiff() {
                   </div>
                   <div>
                     <div className="bg-muted px-4 py-2 font-semibold text-sm">Modified</div>
-                    <div className="overflow-auto max-h-[600px]">
+                    <div className="overflow-auto max-h-[70vh]">
                       {diffLines
                         .filter((line) => line.newLineNumber !== null)
                         .map((line, idx) => (
@@ -448,7 +448,7 @@ export default function TextDiff() {
               ) : (
                 <div>
                   <div className="bg-muted px-4 py-2 font-semibold text-sm">Unified Diff</div>
-                  <div className="overflow-auto max-h-[600px]">
+                  <div className="overflow-auto max-h-[70vh]">
                     {diffLines.map((line, idx) => (
                       <div key={idx} className={`flex ${getLineStyle(line.type)}`}>
                         <span

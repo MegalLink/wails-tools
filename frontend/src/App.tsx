@@ -5,6 +5,7 @@ import Home from "@/pages/Home"
 import TextDiff from "@/pages/TextDiff"
 import JsonUtils from "@/pages/JsonUtils"
 import EpochTools from "@/pages/EpochTools"
+import CodeEditor from "@/pages/CodeEditor"
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
             <Route path="text-diff" element={<TextDiff />} />
             <Route path="json-utils" element={<JsonUtils />} />
             <Route path="epoch-tools" element={<EpochTools />} />
+            <Route path="code-editor" element={<CodeEditor />} />
           </Route>
         </Routes>
       </BrowserRouter>

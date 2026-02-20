@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DatePickerTime } from "@/components/ui/date-picker-time"
 import { Clock, Copy } from "lucide-react"
 
 type TimeUnit = "seconds" | "milliseconds" | "nanoseconds"
@@ -45,19 +47,11 @@ export default function EpochTools() {
   const [timestampTimezone, setTimestampTimezone] = useState<number>(-new Date().getTimezoneOffset() / 60)
   const [timestampError, setTimestampError] = useState("")
   
-  const [dateInputMode, setDateInputMode] = useState<"text" | "separated">("text")
+  const [dateInputMode, setDateInputMode] = useState<"text" | "separated">("separated")
   const [dateInput, setDateInput] = useState("")
   const [dateTimezone, setDateTimezone] = useState<number>(-new Date().getTimezoneOffset() / 60)
-
-  
-  // Separated date inputs
-  const now = new Date()
-  const [dateYear, setDateYear] = useState(now.getFullYear().toString())
-  const [dateMonth, setDateMonth] = useState((now.getMonth() + 1).toString())
-  const [dateDay, setDateDay] = useState(now.getDate().toString())
-  const [dateHour, setDateHour] = useState(now.getHours().toString())
-  const [dateMinute, setDateMinute] = useState(now.getMinutes().toString())
-  const [dateSecond, setDateSecond] = useState(now.getSeconds().toString())
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
+  const [selectedTime, setSelectedTime] = useState("00:00:00")
   
   const [convertedDate, setConvertedDate] = useState("")
   const [convertedTimestamp, setConvertedTimestamp] = useState("")
@@ -100,72 +94,6 @@ export default function EpochTools() {
       setTimestampError("Invalid timestamp length. Expected 10 digits (seconds), 13 digits (milliseconds), or 19 digits (nanoseconds)")
     }
   }, [timestampInput])
-
-  // Validation helpers for date inputs
-  const validateAndSetMonth = (value: string) => {
-    const num = parseInt(value) || 0
-    if (num >= 1 && num <= 12) {
-      setDateMonth(value)
-    } else if (num > 12) {
-      setDateMonth("12")
-    } else if (num < 1 && value !== "") {
-      setDateMonth("1")
-    } else {
-      setDateMonth(value)
-    }
-  }
-
-  const validateAndSetDay = (value: string) => {
-    const num = parseInt(value) || 0
-    if (num >= 1 && num <= 31) {
-      setDateDay(value)
-    } else if (num > 31) {
-      setDateDay("31")
-    } else if (num < 1 && value !== "") {
-      setDateDay("1")
-    } else {
-      setDateDay(value)
-    }
-  }
-
-  const validateAndSetHour = (value: string) => {
-    const num = parseInt(value) || 0
-    if (num >= 0 && num <= 23) {
-      setDateHour(value)
-    } else if (num > 23) {
-      setDateHour("23")
-    } else if (num < 0 && value !== "") {
-      setDateHour("0")
-    } else {
-      setDateHour(value)
-    }
-  }
-
-  const validateAndSetMinute = (value: string) => {
-    const num = parseInt(value) || 0
-    if (num >= 0 && num <= 59) {
-      setDateMinute(value)
-    } else if (num > 59) {
-      setDateMinute("59")
-    } else if (num < 0 && value !== "") {
-      setDateMinute("0")
-    } else {
-      setDateMinute(value)
-    }
-  }
-
-  const validateAndSetSecond = (value: string) => {
-    const num = parseInt(value) || 0
-    if (num >= 0 && num <= 59) {
-      setDateSecond(value)
-    } else if (num > 59) {
-      setDateSecond("59")
-    } else if (num < 0 && value !== "") {
-      setDateSecond("0")
-    } else {
-      setDateSecond(value)
-    }
-  }
 
   const convertTimestampToDate = () => {
     if (timestampError) {
@@ -259,15 +187,19 @@ export default function EpochTools() {
           return
         }
       } else {
-        // Use separated inputs
-        const year = parseInt(dateYear)
-        const month = parseInt(dateMonth) - 1 // Month is 0-indexed
-        const day = parseInt(dateDay)
-        const hour = parseInt(dateHour)
-        const minute = parseInt(dateMinute)
-        const second = parseInt(dateSecond)
+        // Use DatePickerTime component
+        if (!selectedDate) {
+          setConvertedTimestamp("Please select a date")
+          return
+        }
         
-        date = new Date(year, month, day, hour, minute, second)
+        // Parse time from selectedTime (format: HH:MM:SS)
+        const [hours, minutes, seconds] = selectedTime.split(':').map(Number)
+        
+        // Combine date and time
+        date = new Date(selectedDate)
+        date.setHours(hours, minutes, seconds, 0)
+        
         if (isNaN(date.getTime())) {
           setConvertedTimestamp("Invalid date values")
           return
@@ -311,42 +243,49 @@ export default function EpochTools() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Epoch Tools</h2>
+    <div className="container mx-auto p-6 max-w-7xl space-y-6">
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Epoch Tools</h1>
         <p className="text-muted-foreground">Convert between timestamps and human-readable dates</p>
       </div>
 
-      {/* Current Unix Epoch */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Current Unix Epoch Time
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-2xl font-mono px-4 py-2">
-              {currentEpoch}
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => copyToClipboard(currentEpoch.toString())}
-              title="Copy"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
+      {/* Current Unix Epoch - Destacado */}
+      <Card className="border-2">
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span className="font-medium">Current Unix Epoch Time</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-3xl font-mono px-6 py-3">
+                {currentEpoch}
+              </Badge>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copyToClipboard(currentEpoch.toString())}
+                title="Copy to clipboard"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Timestamp to Human Date */}
+      <Tabs defaultValue="timestamp-to-date" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="timestamp-to-date">Timestamp → Date</TabsTrigger>
+          <TabsTrigger value="date-to-timestamp">Date → Timestamp</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="timestamp-to-date" className="mt-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Convert Timestamp to Human Date</CardTitle>
+          <CardHeader className="space-y-1">
+            <CardTitle>Timestamp → Human Date</CardTitle>
+            <p className="text-sm text-muted-foreground">Convert Unix timestamp to readable format</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -354,26 +293,29 @@ export default function EpochTools() {
               <Input
                 id="timestamp-input"
                 type="text"
-                placeholder="1769012683"
+                placeholder="1770315758"
                 value={timestampInput}
                 onChange={(e) => setTimestampInput(e.target.value)}
-                className={`font-mono ${timestampError ? "border-red-500" : ""}`}
+                className={`font-mono text-lg ${timestampError ? "border-destructive" : ""}`}
               />
               {timestampError && (
-                <p className="text-xs text-red-600 dark:text-red-400">{timestampError}</p>
+                <p className="text-xs text-destructive flex items-start gap-1">
+                  <span>⚠️</span>
+                  <span>{timestampError}</span>
+                </p>
               )}
               {!timestampError && timestampInput && (
-                <p className="text-xs text-muted-foreground">
+                <Badge variant="secondary" className="text-xs">
                   Auto-detected: {timestampUnit === "seconds" ? "Seconds (10 digits)" : timestampUnit === "milliseconds" ? "Milliseconds (13 digits)" : "Nanoseconds (19 digits)"}
-                </p>
+                </Badge>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="timestamp-unit">Unit</Label>
+                <Label htmlFor="timestamp-unit" className="text-xs">Unit</Label>
                 <Select value={timestampUnit} onValueChange={(v) => setTimestampUnit(v as TimeUnit)} disabled>
-                  <SelectTrigger id="timestamp-unit">
+                  <SelectTrigger id="timestamp-unit" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -382,16 +324,15 @@ export default function EpochTools() {
                     <SelectItem value="nanoseconds">Nanoseconds</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Auto-detected</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="timestamp-timezone">Timezone</Label>
+                <Label htmlFor="timestamp-timezone" className="text-xs">Timezone</Label>
                 <Select 
                   value={timestampTimezone.toString()} 
                   onValueChange={(v) => setTimestampTimezone(parseFloat(v))}
                 >
-                  <SelectTrigger id="timestamp-timezone">
+                  <SelectTrigger id="timestamp-timezone" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -405,23 +346,22 @@ export default function EpochTools() {
               </div>
             </div>
 
-            <Button onClick={convertTimestampToDate} className="w-full" disabled={!!timestampError || !timestampInput}>
+            <Button onClick={convertTimestampToDate} className="w-full" size="lg" disabled={!!timestampError || !timestampInput}>
               Convert to Date
             </Button>
 
             {convertedDate && convertedDate !== "Invalid timestamp" && convertedDate !== "Error converting timestamp" && (
-              <div className="space-y-3">
-                <Label>Result</Label>
+              <div className="space-y-3 pt-2">
                 {(() => {
                   try {
                     const result = JSON.parse(convertedDate)
                     return (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <Input
                             value={result.main}
                             readOnly
-                            className="font-mono bg-muted"
+                            className="font-mono text-base bg-muted/50"
                           />
                           <Button
                             variant="outline"
@@ -432,19 +372,23 @@ export default function EpochTools() {
                           </Button>
                         </div>
                         
-                        <div className="rounded-md bg-muted p-3 space-y-2 text-sm">
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Assuming that this timestamp is in <strong>{result.unit}</strong>:
-                          </p>
-                          <p>
-                            <span className="font-medium">GMT 0:00:</span> {result.gmt}
-                          </p>
-                          <p>
-                            <span className="font-medium">Your time zone:</span> {result.local}
-                          </p>
-                          <p>
-                            <span className="font-medium">Relative:</span> {result.relative}
-                          </p>
+                        <div className="rounded-lg bg-muted/50 p-4 space-y-2.5 text-sm border">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[80px] pt-0.5">Unit:</span>
+                            <span className="font-medium">{result.unit}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[80px] pt-0.5">GMT 0:00:</span>
+                            <span className="font-mono text-xs">{result.gmt}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[80px] pt-0.5">Your timezone:</span>
+                            <span className="font-mono text-xs">{result.local}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[80px] pt-0.5">Relative:</span>
+                            <span className="text-xs">{result.relative}</span>
+                          </div>
                         </div>
                       </div>
                     )
@@ -471,22 +415,24 @@ export default function EpochTools() {
             )}
           </CardContent>
         </Card>
+        </TabsContent>
 
-        {/* Human Date to Timestamp */}
+        <TabsContent value="date-to-timestamp" className="mt-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Convert Human Date to Timestamp</CardTitle>
+          <CardHeader className="space-y-1">
+            <CardTitle>Human Date → Timestamp</CardTitle>
+            <p className="text-sm text-muted-foreground">Convert readable date to Unix timestamp</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Input Method</Label>
+              <Label className="text-xs">Input Method</Label>
               <Select value={dateInputMode} onValueChange={(v) => setDateInputMode(v as "text" | "separated")}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="text">Text Format</SelectItem>
                   <SelectItem value="separated">Separated Fields</SelectItem>
+                  <SelectItem value="text">Text Format</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -497,134 +443,31 @@ export default function EpochTools() {
                 <Input
                   id="date-input"
                   type="text"
-                  placeholder="2026-01-21 15:49:28"
+                  placeholder="2026-02-05 13:20:42"
                   value={dateInput}
                   onChange={(e) => setDateInput(e.target.value)}
                   className="font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
-                  <strong>Format:</strong> YYYY-MM-DD HH:MM:SS or RFC 2822
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  <strong>Example:</strong> 2026-01-21 11:33:19 GMT-05:00
+                  Format: YYYY-MM-DD HH:MM:SS or RFC 2822
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                <Label>Date & Time Fields</Label>
-                <div className="grid grid-cols-6 gap-2 items-end">
-                  <div className="space-y-1">
-                    <Label htmlFor="year" className="text-xs">Yr</Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      value={dateYear}
-                      onChange={(e) => setDateYear(e.target.value)}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                  <span className="text-muted-foreground pb-2">-</span>
-                  <div className="space-y-1">
-                    <Label htmlFor="month" className="text-xs">Mon</Label>
-                    <Input
-                      id="month"
-                      type="number"
-                      min="1"
-                      max="12"
-                      value={dateMonth}
-                      onChange={(e) => validateAndSetMonth(e.target.value)}
-                      onBlur={(e) => {
-                        if (e.target.value === "" || parseInt(e.target.value) < 1) {
-                          setDateMonth("1")
-                        }
-                      }}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                  <span className="text-muted-foreground pb-2">-</span>
-                  <div className="space-y-1">
-                    <Label htmlFor="day" className="text-xs">Day</Label>
-                    <Input
-                      id="day"
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={dateDay}
-                      onChange={(e) => validateAndSetDay(e.target.value)}
-                      onBlur={(e) => {
-                        if (e.target.value === "" || parseInt(e.target.value) < 1) {
-                          setDateDay("1")
-                        }
-                      }}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-6 gap-2 items-end">
-                  <div className="space-y-1">
-                    <Label htmlFor="hour" className="text-xs">Hr</Label>
-                    <Input
-                      id="hour"
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={dateHour}
-                      onChange={(e) => validateAndSetHour(e.target.value)}
-                      onBlur={(e) => {
-                        if (e.target.value === "") {
-                          setDateHour("0")
-                        }
-                      }}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                  <span className="text-muted-foreground pb-2">:</span>
-                  <div className="space-y-1">
-                    <Label htmlFor="minute" className="text-xs">Min</Label>
-                    <Input
-                      id="minute"
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={dateMinute}
-                      onChange={(e) => validateAndSetMinute(e.target.value)}
-                      onBlur={(e) => {
-                        if (e.target.value === "") {
-                          setDateMinute("0")
-                        }
-                      }}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                  <span className="text-muted-foreground pb-2">:</span>
-                  <div className="space-y-1">
-                    <Label htmlFor="second" className="text-xs">Sec</Label>
-                    <Input
-                      id="second"
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={dateSecond}
-                      onChange={(e) => validateAndSetSecond(e.target.value)}
-                      onBlur={(e) => {
-                        if (e.target.value === "") {
-                          setDateSecond("0")
-                        }
-                      }}
-                      className="font-mono text-center"
-                    />
-                  </div>
-                </div>
-              </div>
+              <DatePickerTime
+                date={selectedDate}
+                onDateChange={setSelectedDate}
+                onTimeChange={setSelectedTime}
+                defaultTime={selectedTime}
+              />
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="date-timezone">Timezone</Label>
+              <Label htmlFor="date-timezone" className="text-xs">Timezone</Label>
               <Select 
                 value={dateTimezone.toString()} 
                 onValueChange={(v) => setDateTimezone(parseFloat(v))}
               >
-                <SelectTrigger id="date-timezone">
+                <SelectTrigger id="date-timezone" className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -637,61 +480,69 @@ export default function EpochTools() {
               </Select>
             </div>
 
-            <Button onClick={convertDateToTimestamp} className="w-full">
+            <Button onClick={convertDateToTimestamp} className="w-full" size="lg">
               Convert to Timestamp
             </Button>
 
             {convertedTimestamp && convertedTimestamp !== "Invalid date format" && convertedTimestamp !== "Invalid date values" && convertedTimestamp !== "Error converting date" && (
-              <div className="space-y-3">
-                <Label>Results</Label>
+              <div className="space-y-3 pt-2">
                 {(() => {
                   try {
                     const result = JSON.parse(convertedTimestamp)
                     return (
-                      <div className="space-y-3">
-                        <div className="rounded-md bg-muted p-3 space-y-2 text-sm">
-                          <p>
-                            <span className="font-medium">Epoch timestamp:</span>{" "}
-                            <span className="font-mono">{result.seconds}</span>
+                      <div className="rounded-lg bg-muted/50 p-4 space-y-3 text-sm border">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Seconds:</span>
+                          <div className="flex items-center gap-2">
+                            <code className="font-mono text-sm">{result.seconds}</code>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 ml-1"
+                              className="h-7 w-7"
                               onClick={() => copyToClipboard(result.seconds)}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          </p>
-                          <p>
-                            <span className="font-medium">Timestamp in milliseconds:</span>{" "}
-                            <span className="font-mono">{result.milliseconds}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Milliseconds:</span>
+                          <div className="flex items-center gap-2">
+                            <code className="font-mono text-xs">{result.milliseconds}</code>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 ml-1"
+                              className="h-7 w-7"
                               onClick={() => copyToClipboard(result.milliseconds)}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          </p>
-                          <p>
-                            <span className="font-medium">Timestamp in nanoseconds:</span>{" "}
-                            <span className="font-mono">{result.nanoseconds}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Nanoseconds:</span>
+                          <div className="flex items-center gap-2">
+                            <code className="font-mono text-xs">{result.nanoseconds}</code>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 ml-1"
+                              className="h-7 w-7"
                               onClick={() => copyToClipboard(result.nanoseconds)}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                          </p>
-                          <p>
-                            <span className="font-medium">Date and time (GMT):</span> {result.gmt}
-                          </p>
-                          <p>
-                            <span className="font-medium">Date and time (your time zone):</span> {result.local}
-                          </p>
+                          </div>
+                        </div>
+                        <div className="h-px bg-border my-2" />
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[60px]">GMT:</span>
+                            <span className="font-mono text-xs">{result.gmt}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground min-w-[60px]">Local:</span>
+                            <span className="font-mono text-xs">{result.local}</span>
+                          </div>
                         </div>
                       </div>
                     )
@@ -718,7 +569,8 @@ export default function EpochTools() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

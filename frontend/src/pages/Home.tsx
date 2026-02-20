@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Clock, Braces } from "lucide-react"
+import { FileText, Clock, Braces, Code } from "lucide-react"
 
 const tools = [
   {
@@ -20,6 +20,12 @@ const tools = [
     description: "Convert between timestamps and human-readable dates",
     icon: Clock,
     path: "/epoch-tools",
+  },
+  {
+    title: "Code Editor",
+    description: "Full-featured code editor with syntax highlighting and 24 language support",
+    icon: Code,
+    path: "/code-editor",
   },
 ]
 
