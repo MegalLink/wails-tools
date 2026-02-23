@@ -4,10 +4,12 @@ import {
     getCoreRowModel,
     getFilteredRowModel,
     getPaginationRowModel,
+    getSortedRowModel,
     flexRender,
     type ColumnDef,
     type ColumnFiltersState,
     type VisibilityState,
+    type SortingState,
 } from "@tanstack/react-table"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,6 +46,9 @@ import {
     X,
     Filter,
     Columns2,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -123,6 +128,7 @@ export default function CsvViewer() {
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
     const [advancedFilters, setAdvancedFilters] = useState(false)
+    const [sorting, setSorting] = useState<SortingState>([])
     const [pageSize, setPageSize] = useState(25)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -148,12 +154,14 @@ export default function CsvViewer() {
     const table = useReactTable({
         data: rows,
         columns,
-        state: { globalFilter, columnFilters, columnVisibility },
+        state: { globalFilter, columnFilters, columnVisibility, sorting },
         onGlobalFilterChange: setGlobalFilter,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
+        onSortingChange: setSorting,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
+        getSortedRowModel: getSortedRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         initialState: { pagination: { pageSize } },
         globalFilterFn: "includesString",
@@ -474,9 +482,23 @@ export default function CsvViewer() {
                                                     className="bg-card font-semibold text-xs uppercase tracking-wide px-3 border-b"
                                                     style={{ minWidth: `${header.column.columnDef.minSize ?? 120}px` }}
                                                 >
-                                                    <div className="truncate">
-                                                        {flexRender(header.column.columnDef.header, header.getContext())}
-                                                    </div>
+                                                    {/* Sortable header button */}
+                                                    <button
+                                                        className="flex items-center gap-1 w-full text-left group select-none"
+                                                        onClick={header.column.getToggleSortingHandler()}
+                                                        title={`Sort by ${header.column.id}`}
+                                                    >
+                                                        <span className="truncate flex-1">
+                                                            {flexRender(header.column.columnDef.header, header.getContext())}
+                                                        </span>
+                                                        {header.column.getIsSorted() === "asc" ? (
+                                                            <ArrowUp className="h-3 w-3 shrink-0 text-primary" />
+                                                        ) : header.column.getIsSorted() === "desc" ? (
+                                                            <ArrowDown className="h-3 w-3 shrink-0 text-primary" />
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+                                                        )}
+                                                    </button>
                                                     {advancedFilters && (
                                                         <ColumnFilter columnId={header.column.id} table={table} />
                                                     )}

@@ -3,17 +3,19 @@ import Editor from "@monaco-editor/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "@/components/theme-provider"
-import { 
-  Copy, 
-  Download, 
-  Upload, 
-  Trash2, 
+import {
+  Copy,
+  Download,
+  Upload,
+  Trash2,
   FileCode,
   Maximize2,
   Minimize2,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Wand2,
 } from "lucide-react"
 
 const STORAGE_KEY = "codeEditor_content"
@@ -60,6 +62,7 @@ export default function CodeEditor() {
   })
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [selectedCharCount, setSelectedCharCount] = useState(0)
+  const [autoDetected, setAutoDetected] = useState(false)
 
   const getMonacoTheme = () => {
     if (theme === "system") {
@@ -120,7 +123,7 @@ export default function CodeEditor() {
         reader.onload = (e) => {
           const content = e.target?.result as string
           setCode(content)
-          
+
           // Auto-detect language from file extension
           const ext = file.name.split('.').pop()?.toLowerCase()
           const langMap: Record<string, string> = {
@@ -150,6 +153,9 @@ export default function CodeEditor() {
           }
           if (ext && langMap[ext]) {
             setLanguage(langMap[ext])
+            setAutoDetected(true)
+          } else {
+            setAutoDetected(false)
           }
         }
         reader.readAsText(file)
@@ -167,10 +173,18 @@ export default function CodeEditor() {
           <h1 className="text-3xl font-bold tracking-tight">Code Editor</h1>
           <p className="text-muted-foreground">Full-featured code editor with syntax highlighting</p>
         </div>
-        <Badge variant="outline" className="gap-2">
-          <FileCode className="h-4 w-4" />
-          {LANGUAGES.find(l => l.value === language)?.label}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {autoDetected && (
+            <Badge variant="secondary" className="gap-1.5">
+              <Wand2 className="h-3.5 w-3.5" />
+              Auto-detected
+            </Badge>
+          )}
+          <Badge variant="outline" className="gap-2">
+            <FileCode className="h-4 w-4" />
+            {LANGUAGES.find(l => l.value === language)?.label}
+          </Badge>
+        </div>
       </div>
 
       <Card>
@@ -178,6 +192,27 @@ export default function CodeEditor() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Editor</CardTitle>
             <div className="flex items-center gap-2">
+              {/* Language selector */}
+              <Select
+                value={language}
+                onValueChange={(val) => {
+                  setLanguage(val)
+                  setAutoDetected(false)
+                }}
+              >
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <FileCode className="h-3.5 w-3.5 mr-1 shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l.value} value={l.value} className="text-xs">
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="h-6 w-px bg-border mx-0.5" />
               <Button
                 variant="outline"
                 size="sm"
