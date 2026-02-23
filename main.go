@@ -14,12 +14,13 @@ import (
 var assets embed.FS
 
 func main() {
+	const version="1.0.0"
 	// Create an instance of the app structure
 	app := NewApp()
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:            "wails-tools",
+		Title:            "wails-tools " + version,
 		Width:            1024,
 		Height:           768,
 		WindowStartState: options.Maximised,

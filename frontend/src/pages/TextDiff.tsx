@@ -60,106 +60,141 @@ function formatJSON(text: string): string {
   }
 }
 
-// Custom diff algorithm
+// LCS-based diff algorithm (correct handling of reordered/distant matching lines)
 function computeLineDiff(oldText: string, newText: string): DiffLine[] {
   const oldLines = oldText.split("\n")
   const newLines = newText.split("\n")
-  const result: DiffLine[] = []
+  const m = oldLines.length
+  const n = newLines.length
 
-  let oldIndex = 0
-  let newIndex = 0
+  // Build LCS table using dynamic programming
+  const lcs: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        lcs[i][j] = lcs[i - 1][j - 1] + 1
+      } else {
+        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1])
+      }
+    }
+  }
 
-  while (oldIndex < oldLines.length || newIndex < newLines.length) {
-    const oldLine = oldLines[oldIndex]
-    const newLine = newLines[newIndex]
-
-    if (oldIndex >= oldLines.length) {
-      // Only new lines remaining
-      result.push({
-        type: "added",
-        oldLineNumber: null,
-        newLineNumber: newIndex + 1,
-        content: newLine,
-      })
-      newIndex++
-    } else if (newIndex >= newLines.length) {
-      // Only old lines remaining
-      result.push({
-        type: "removed",
-        oldLineNumber: oldIndex + 1,
-        newLineNumber: null,
-        content: oldLine,
-      })
-      oldIndex++
-    } else if (oldLine === newLine) {
-      // Lines are equal
-      result.push({
-        type: "equal",
-        oldLineNumber: oldIndex + 1,
-        newLineNumber: newIndex + 1,
-        content: oldLine,
-      })
-      oldIndex++
-      newIndex++
+  // Backtrack the LCS table to produce the diff operations
+  type Op = { type: "equal" | "added" | "removed"; content: string }
+  const ops: Op[] = []
+  let i = m
+  let j = n
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      ops.unshift({ type: "equal", content: oldLines[i - 1] })
+      i--
+      j--
+    } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+      ops.unshift({ type: "added", content: newLines[j - 1] })
+      j--
     } else {
-      // Lines are different - check if this is a modification or add/remove
-      let foundMatch = false
+      ops.unshift({ type: "removed", content: oldLines[i - 1] })
+      i--
+    }
+  }
 
-      // Look ahead in new lines to see if old line appears later
-      for (let i = 1; i < Math.min(5, newLines.length - newIndex); i++) {
-        if (oldLine === newLines[newIndex + i]) {
-          // Old line appears later in new - current new lines are added
-          for (let j = 0; j < i; j++) {
-            result.push({
-              type: "added",
-              oldLineNumber: null,
-              newLineNumber: newIndex + 1,
-              content: newLines[newIndex],
-            })
-            newIndex++
-          }
-          foundMatch = true
+  // Convert to DiffLine with proper line numbers
+  const result: DiffLine[] = []
+  let oldLineNum = 0
+  let newLineNum = 0
+  for (const op of ops) {
+    if (op.type === "equal") {
+      oldLineNum++
+      newLineNum++
+      result.push({ type: "equal", oldLineNumber: oldLineNum, newLineNumber: newLineNum, content: op.content })
+    } else if (op.type === "added") {
+      newLineNum++
+      result.push({ type: "added", oldLineNumber: null, newLineNumber: newLineNum, content: op.content })
+    } else {
+      oldLineNum++
+      result.push({ type: "removed", oldLineNumber: oldLineNum, newLineNumber: null, content: op.content })
+    }
+  }
+
+  return result
+}
+
+// Extract the JSON key from a line like:  "email": "foo"  →  "email"
+function getJsonKey(content: string): string | null {
+  const match = content.match(/^\s*"([^"]+)"\s*:/)
+  return match ? match[1] : null
+}
+
+// Post-process LCS diff to detect same-key JSON field modifications
+// Runs of [removed…] immediately followed by [added…] are scanned;
+// pairs that share the same JSON key are promoted to type "modified".
+function pairModifiedLines(lines: DiffLine[]): DiffLine[] {
+  const result: DiffLine[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    // Collect consecutive removed lines
+    const removedBlock: DiffLine[] = []
+    while (i < lines.length && lines[i].type === "removed") {
+      removedBlock.push(lines[i])
+      i++
+    }
+
+    // Collect consecutive added lines that directly follow
+    const addedBlock: DiffLine[] = []
+    while (i < lines.length && lines[i].type === "added") {
+      addedBlock.push(lines[i])
+      i++
+    }
+
+    if (removedBlock.length === 0 && addedBlock.length === 0) {
+      // Normal equal line
+      result.push(lines[i])
+      i++
+      continue
+    }
+
+    if (removedBlock.length === 0) {
+      result.push(...addedBlock)
+      continue
+    }
+
+    if (addedBlock.length === 0) {
+      result.push(...removedBlock)
+      continue
+    }
+
+    // Try to pair removed ↔ added by matching JSON key
+    const usedAddedIdx = new Set<number>()
+    const pairMap = new Map<number, number>() // removedIdx → addedIdx
+
+    for (let ri = 0; ri < removedBlock.length; ri++) {
+      const key = getJsonKey(removedBlock[ri].content)
+      if (!key) continue
+      for (let ai = 0; ai < addedBlock.length; ai++) {
+        if (usedAddedIdx.has(ai)) continue
+        if (getJsonKey(addedBlock[ai].content) === key) {
+          pairMap.set(ri, ai)
+          usedAddedIdx.add(ai)
           break
         }
       }
+    }
 
-      if (!foundMatch) {
-        // Look ahead in old lines to see if new line appears later
-        for (let i = 1; i < Math.min(5, oldLines.length - oldIndex); i++) {
-          if (newLine === oldLines[oldIndex + i]) {
-            // New line appears later in old - current old lines are removed
-            for (let j = 0; j < i; j++) {
-              result.push({
-                type: "removed",
-                oldLineNumber: oldIndex + 1,
-                newLineNumber: null,
-                content: oldLines[oldIndex],
-              })
-              oldIndex++
-            }
-            foundMatch = true
-            break
-          }
-        }
-      }
+    // Emit unmatched removed lines
+    for (let ri = 0; ri < removedBlock.length; ri++) {
+      if (!pairMap.has(ri)) result.push(removedBlock[ri])
+    }
 
-      if (!foundMatch) {
-        // No match found - old line removed, new line added
-        result.push({
-          type: "removed",
-          oldLineNumber: oldIndex + 1,
-          newLineNumber: null,
-          content: oldLine,
-        })
-        result.push({
-          type: "added",
-          oldLineNumber: null,
-          newLineNumber: newIndex + 1,
-          content: newLine,
-        })
-        oldIndex++
-        newIndex++
-      }
+    // Emit matched pairs as modified (old line first, then new line)
+    for (const [ri, ai] of pairMap.entries()) {
+      result.push({ ...removedBlock[ri], type: "modified" })
+      result.push({ ...addedBlock[ai], type: "modified" })
+    }
+
+    // Emit unmatched added lines
+    for (let ai = 0; ai < addedBlock.length; ai++) {
+      if (!usedAddedIdx.has(ai)) result.push(addedBlock[ai])
     }
   }
 
@@ -204,7 +239,8 @@ export default function TextDiff() {
     const leftToCompare = jsonMode && canUseJsonMode ? formatJSON(leftText) : leftText
     const rightToCompare = jsonMode && canUseJsonMode ? formatJSON(rightText) : rightText
 
-    return computeLineDiff(leftToCompare, rightToCompare)
+    const raw = computeLineDiff(leftToCompare, rightToCompare)
+    return jsonMode && canUseJsonMode ? pairModifiedLines(raw) : raw
   }, [leftText, rightText, isComparing, jsonMode, canUseJsonMode])
 
   // Calculate statistics

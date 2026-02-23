@@ -10,10 +10,32 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarInset,
-  SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toogle"
-import { Home, FileText, Clock, Braces, Code, Table2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Home, FileText, Clock, Braces, Code, Table2, PanelLeft, ChevronLeft, ChevronRight } from "lucide-react"
+
+function SidebarToggleButton() {
+  const { state, toggleSidebar } = useSidebar()
+  const isOpen = state === "expanded"
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="flex items-center gap-1 px-2"
+      onClick={toggleSidebar}
+    >
+      <PanelLeft className="h-4 w-4" />
+      {isOpen ? (
+        <ChevronLeft className="h-3.5 w-3.5" />
+      ) : (
+        <ChevronRight className="h-3.5 w-3.5" />
+      )}
+      <span className="sr-only">Toggle Sidebar</span>
+    </Button>
+  )
+}
 
 const navItems = [
   { title: "Home", path: "/", icon: Home },
@@ -28,7 +50,8 @@ export function AppLayout() {
   const location = useLocation()
 
   return (
-    <SidebarProvider>
+    <div className="flex h-screen flex-col" style={{ paddingTop: "28px" }}>
+    <SidebarProvider className="flex-1 min-h-0">
       <Sidebar>
         <SidebarHeader className="border-b px-6 py-4">
         </SidebarHeader>
@@ -58,7 +81,7 @@ export function AppLayout() {
       <SidebarInset>
         <header className="flex h-14 items-center justify-between border-b px-6">
           <div className="flex items-center gap-2">
-            <SidebarTrigger />
+            <SidebarToggleButton />
             <h1 className="text-xl font-semibold">
               {navItems.find((item) => item.path === location.pathname)?.title || "Modern Tools"}
             </h1>
@@ -70,5 +93,6 @@ export function AppLayout() {
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </div>
   )
 }
