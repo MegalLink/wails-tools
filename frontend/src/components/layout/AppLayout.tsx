@@ -13,7 +13,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toogle"
-import { Home, FileText, Clock, Braces, Code } from "lucide-react"
+import { Home, FileText, Clock, Braces, Code, Table2 } from "lucide-react"
 
 const navItems = [
   { title: "Home", path: "/", icon: Home },
@@ -21,6 +21,7 @@ const navItems = [
   { title: "JSON Utils", path: "/json-utils", icon: Braces },
   { title: "Epoch Tools", path: "/epoch-tools", icon: Clock },
   { title: "Code Editor", path: "/code-editor", icon: Code },
+  { title: "CSV Viewer", path: "/csv-viewer", icon: Table2 },
 ]
 
 export function AppLayout() {

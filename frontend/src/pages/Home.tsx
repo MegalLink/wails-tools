@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Clock, Braces, Code } from "lucide-react"
+import { FileText, Clock, Braces, Code, Table2 } from "lucide-react"
 
 const tools = [
   {
@@ -27,6 +27,12 @@ const tools = [
     icon: Code,
     path: "/code-editor",
   },
+  {
+    title: "CSV Viewer",
+    description: "Load, explore and filter CSV/DSV files with advanced column search",
+    icon: Table2,
+    path: "/csv-viewer",
+  },
 ]
 
 export default function Home() {
@@ -38,7 +44,7 @@ export default function Home() {
           A collection of developer utilities to make your work easier
         </p>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {tools.map((tool) => {
           const Icon = tool.icon
