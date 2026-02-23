@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import Editor from "@monaco-editor/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FileJson } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { FileJson, ChevronLeft, ChevronRight, Check, Copy, CheckCheck, GitMerge, AlertCircle } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 
 const STORAGE_KEY_LEFT = "textDiff_left"
@@ -201,6 +203,66 @@ function pairModifiedLines(lines: DiffLine[]): DiffLine[] {
   return result
 }
 
+// ─── Merge types & helpers ────────────────────────────────────────────────────
+
+type MergeDecision = "left" | "right" | null
+
+interface MergeHunk {
+  id: number
+  type: "equal" | "conflict"
+  // equal hunks
+  equalLines: DiffLine[]
+  // conflict hunks
+  leftLines: DiffLine[]
+  rightLines: DiffLine[]
+  decision: MergeDecision
+}
+
+function buildMergeHunks(diffLines: DiffLine[]): MergeHunk[] {
+  const hunks: MergeHunk[] = []
+  let i = 0
+  let id = 0
+
+  while (i < diffLines.length) {
+    const line = diffLines[i]
+    if (line.type === "equal") {
+      const equalLines: DiffLine[] = []
+      while (i < diffLines.length && diffLines[i].type === "equal") {
+        equalLines.push(diffLines[i])
+        i++
+      }
+      hunks.push({ id: id++, type: "equal", equalLines, leftLines: [], rightLines: [], decision: null })
+    } else {
+      // collect consecutive non-equal lines into left (original) and right (modified)
+      const leftLines: DiffLine[] = []
+      const rightLines: DiffLine[] = []
+      while (i < diffLines.length && diffLines[i].type !== "equal") {
+        const l = diffLines[i]
+        const isLeft = l.type === "removed" || (l.type === "modified" && l.oldLineNumber !== null && l.newLineNumber === null)
+        if (isLeft) leftLines.push(l)
+        else rightLines.push(l)
+        i++
+      }
+      hunks.push({ id: id++, type: "conflict", equalLines: [], leftLines, rightLines, decision: null })
+    }
+  }
+
+  return hunks
+}
+
+function buildMergedText(hunks: MergeHunk[]): string {
+  const lines: string[] = []
+  for (const hunk of hunks) {
+    if (hunk.type === "equal") {
+      lines.push(...hunk.equalLines.map((l) => l.content))
+    } else {
+      const chosen = hunk.decision === "right" ? hunk.rightLines : hunk.leftLines
+      lines.push(...chosen.map((l) => l.content))
+    }
+  }
+  return lines.join("\n")
+}
+
 export default function TextDiff() {
   const { theme } = useTheme()
 
@@ -224,8 +286,10 @@ export default function TextDiff() {
   })
 
   const [isComparing, setIsComparing] = useState(false)
-  const [viewType, setViewType] = useState<"split" | "unified">("split")
+  const [viewType, setViewType] = useState<"split" | "unified" | "merge">("split")
   const [activeTab, setActiveTab] = useState("input")
+  const [mergeHunks, setMergeHunks] = useState<MergeHunk[]>([])
+  const [copiedMerge, setCopiedMerge] = useState(false)
 
   // Check if both texts are valid JSON
   const isLeftJSON = useMemo(() => isValidJSON(leftText), [leftText])
@@ -250,6 +314,32 @@ export default function TextDiff() {
     const modified = diffLines.filter((l) => l.type === "modified").length / 2 // Modified creates 2 lines
     return { added, removed, modified }
   }, [diffLines])
+
+  // Build merge hunks when diff changes
+  useEffect(() => {
+    setMergeHunks(buildMergeHunks(diffLines))
+  }, [diffLines])
+
+  const decideMergeHunk = useCallback((id: number, decision: MergeDecision) => {
+    setMergeHunks((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, decision } : h))
+    )
+  }, [])
+
+  const mergedText = useMemo(() => buildMergedText(mergeHunks), [mergeHunks])
+
+  const mergeStats = useMemo(() => {
+    const conflicts = mergeHunks.filter((h) => h.type === "conflict")
+    const resolved = conflicts.filter((h) => h.decision !== null)
+    return { total: conflicts.length, resolved: resolved.length }
+  }, [mergeHunks])
+
+  const copyMergedText = useCallback(() => {
+    navigator.clipboard.writeText(mergedText).then(() => {
+      setCopiedMerge(true)
+      setTimeout(() => setCopiedMerge(false), 2000)
+    })
+  }, [mergedText])
 
   // Save to localStorage on change
   useEffect(() => {
@@ -439,12 +529,181 @@ export default function TextDiff() {
               >
                 Unified View
               </Button>
+              <Button
+                variant={viewType === "merge" ? "default" : "outline"}
+                className="gap-2"
+                onClick={() => setViewType("merge")}
+              >
+                <GitMerge className="h-4 w-4" />
+                Merge
+              </Button>
             </div>
           </div>
 
           <Card>
             <CardContent className="p-0">
-              {viewType === "split" ? (
+              {viewType === "merge" ? (
+                <TooltipProvider>
+                  <div>
+                    {/* Merge toolbar */}
+                    <div className="bg-muted px-4 py-2 flex items-center justify-between text-sm border-b">
+                      <div className="flex items-center gap-3">
+                        <GitMerge className="h-4 w-4" />
+                        <span className="font-semibold">Visual Merge</span>
+                        <Separator orientation="vertical" className="h-4" />
+                        {mergeStats.resolved < mergeStats.total ? (
+                          <span className="flex items-center gap-1 text-amber-500">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {mergeStats.resolved}/{mergeStats.total} conflicts resolved
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-green-500">
+                            <CheckCheck className="h-3.5 w-3.5" />
+                            All {mergeStats.total} conflicts resolved
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() =>
+                          setMergeHunks((prev) => prev.map((h) => h.type === "conflict" ? { ...h, decision: "left" } : h))
+                        }>
+                          Accept all ← Original
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() =>
+                          setMergeHunks((prev) => prev.map((h) => h.type === "conflict" ? { ...h, decision: "right" } : h))
+                        }>
+                          Accept all Modified →
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Hunk list */}
+                    <div className="overflow-auto max-h-[50vh]">
+                      {mergeHunks.map((hunk) => {
+                        if (hunk.type === "equal") {
+                          return (
+                            <div key={hunk.id}>
+                              {hunk.equalLines.map((line, li) => (
+                                <div key={li} className="flex bg-background">
+                                  <span className="px-4 py-0.5 min-w-[50px] text-right text-xs text-muted-foreground font-mono">
+                                    {line.oldLineNumber}
+                                  </span>
+                                  <span className="px-4 py-0.5 font-mono text-sm flex-1 text-muted-foreground">{line.content}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        }
+
+                        // Conflict hunk
+                        const isResolved = hunk.decision !== null
+                        return (
+                          <div
+                            key={hunk.id}
+                            className={`border-y ${isResolved ? "border-green-500/30" : "border-amber-500/40"}`}
+                          >
+                            {/* Conflict header */}
+                            <div className={`flex items-center justify-between px-4 py-1 text-xs font-semibold ${isResolved ? "bg-green-500/5" : "bg-amber-500/5"}`}>
+                              <span className="text-muted-foreground">
+                                {isResolved
+                                  ? `✓ Resolved — using ${hunk.decision === "left" ? "Original" : "Modified"}`
+                                  : "⚡ Conflict — choose a version"}
+                              </span>
+                              {isResolved && (
+                                <Button size="sm" variant="ghost" className="h-5 text-xs px-2 text-muted-foreground" onClick={() => decideMergeHunk(hunk.id, null)}>
+                                  Undo
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Two columns: original | modified */}
+                            <div className="grid grid-cols-2 divide-x">
+                              {/* LEFT — original */}
+                              <div className={`${hunk.decision === "left" ? "bg-green-500/10 ring-2 ring-inset ring-green-500/40" : hunk.decision === "right" ? "opacity-40" : "bg-red-500/5"}`}>
+                                <div className="flex items-center justify-between px-3 py-1 text-xs text-red-400 font-medium">
+                                  <span>← Original</span>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant={hunk.decision === "left" ? "default" : "outline"}
+                                        className={`h-6 px-2 text-xs gap-1 ${hunk.decision === "left" ? "bg-green-600 hover:bg-green-700 border-green-600" : ""}`}
+                                        onClick={() => decideMergeHunk(hunk.id, hunk.decision === "left" ? null : "left")}
+                                      >
+                                        {hunk.decision === "left" ? <Check className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+                                        {hunk.decision === "left" ? "Accepted" : "Accept"}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Use original version</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                                {hunk.leftLines.map((line, li) => (
+                                  <div key={li} className="flex">
+                                    <span className="px-3 py-0.5 min-w-[40px] text-right text-xs text-red-500 font-mono">{line.oldLineNumber}</span>
+                                    <span className="px-3 py-0.5 font-mono text-sm flex-1 text-red-300">{line.content}</span>
+                                  </div>
+                                ))}
+                                {hunk.leftLines.length === 0 && (
+                                  <div className="px-3 py-1 text-xs text-muted-foreground italic">— empty —</div>
+                                )}
+                              </div>
+
+                              {/* RIGHT — modified */}
+                              <div className={`${hunk.decision === "right" ? "bg-green-500/10 ring-2 ring-inset ring-green-500/40" : hunk.decision === "left" ? "opacity-40" : "bg-green-500/5"}`}>
+                                <div className="flex items-center justify-between px-3 py-1 text-xs text-green-400 font-medium">
+                                  <span>Modified →</span>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant={hunk.decision === "right" ? "default" : "outline"}
+                                        className={`h-6 px-2 text-xs gap-1 ${hunk.decision === "right" ? "bg-green-600 hover:bg-green-700 border-green-600" : ""}`}
+                                        onClick={() => decideMergeHunk(hunk.id, hunk.decision === "right" ? null : "right")}
+                                      >
+                                        {hunk.decision === "right" ? <Check className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                        {hunk.decision === "right" ? "Accepted" : "Accept"}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Use modified version</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                                {hunk.rightLines.map((line, li) => (
+                                  <div key={li} className="flex">
+                                    <span className="px-3 py-0.5 min-w-[40px] text-right text-xs text-green-500 font-mono">{line.newLineNumber}</span>
+                                    <span className="px-3 py-0.5 font-mono text-sm flex-1 text-green-300">{line.content}</span>
+                                  </div>
+                                ))}
+                                {hunk.rightLines.length === 0 && (
+                                  <div className="px-3 py-1 text-xs text-muted-foreground italic">— empty —</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Result preview */}
+                    <div className="border-t">
+                      <div className="flex items-center justify-between px-4 py-2 bg-muted text-sm font-semibold">
+                        <span>Merged Result</span>
+                        <Button size="sm" variant="outline" className="gap-2" onClick={copyMergedText}>
+                          {copiedMerge ? <CheckCheck className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedMerge ? "Copied!" : "Copy"}
+                        </Button>
+                      </div>
+                      <div className="overflow-auto max-h-[25vh] bg-background">
+                        {mergedText.split("\n").map((line, idx) => (
+                          <div key={idx} className="flex">
+                            <span className="px-4 py-0.5 min-w-[50px] text-right text-xs text-muted-foreground font-mono select-none">{idx + 1}</span>
+                            <span className="px-4 py-0.5 font-mono text-sm flex-1">{line}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </TooltipProvider>
+              ) : viewType === "split" ? (
                 <div className="grid grid-cols-2 divide-x">
                   <div>
                     <div className="bg-muted px-4 py-2 font-semibold text-sm">Original</div>
