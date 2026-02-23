@@ -168,7 +168,7 @@ function computeLineDiff(oldText: string, newText: string): DiffLine[] {
 
 export default function TextDiff() {
   const { theme } = useTheme()
-  
+
   const getMonacoTheme = () => {
     if (theme === "system") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs"
@@ -200,10 +200,10 @@ export default function TextDiff() {
   // Compute diff
   const diffLines = useMemo(() => {
     if (!isComparing) return []
-    
+
     const leftToCompare = jsonMode && canUseJsonMode ? formatJSON(leftText) : leftText
     const rightToCompare = jsonMode && canUseJsonMode ? formatJSON(rightText) : rightText
-    
+
     return computeLineDiff(leftToCompare, rightToCompare)
   }, [leftText, rightText, isComparing, jsonMode, canUseJsonMode])
 
@@ -273,7 +273,7 @@ export default function TextDiff() {
               className="gap-2"
             >
               <FileJson className="h-4 w-4" />
-              JSON mode {jsonMode ? "ON" : "OFF"}
+              JSON mode is {jsonMode ? "ON" : "OFF"}
             </Button>
           </div>
         )}
@@ -359,11 +359,11 @@ export default function TextDiff() {
           </div>
 
           <div className="flex justify-center">
-            <Button 
+            <Button
               onClick={() => {
                 setIsComparing(true)
                 setActiveTab("comparison")
-              }} 
+              }}
               size="lg"
             >
               Compare Texts
@@ -471,11 +471,11 @@ export default function TextDiff() {
           </Card>
 
           <div className="flex justify-center">
-            <Button 
+            <Button
               onClick={() => {
                 setIsComparing(false)
                 setActiveTab("input")
-              }} 
+              }}
               variant="outline"
             >
               Back to Edit

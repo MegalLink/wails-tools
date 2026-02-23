@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react"
+import { useCallback, useRef, useMemo } from "react"
 import {
     useReactTable,
     getCoreRowModel,
@@ -50,6 +50,8 @@ import {
     ArrowUp,
     ArrowDown,
 } from "lucide-react"
+import { useCsvViewerStore } from "@/store/csvViewerStore"
+import { useState } from "react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CsvRow = Record<string, string>
@@ -70,7 +72,6 @@ function parseCsv(text: string, sep: string): { headers: string[]; rows: CsvRow[
 
     const parseLine = (line: string): string[] => {
         if (sep === ",") {
-            // RFC 4180-ish parsing for comma
             const result: string[] = []
             let current = ""
             let inQuotes = false
@@ -117,27 +118,41 @@ function ColumnFilter({ columnId, table }: { columnId: string; table: ReturnType
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function CsvViewer() {
+    // ── Persisted state from Zustand store ────────────────────────────────────
+    const {
+        rawText,
+        fileName,
+        separator,
+        customSep,
+        globalFilter,
+        columnFilters,
+        columnVisibility,
+        sorting,
+        advancedFilters,
+        pageSize,
+        setSeparator,
+        setCustomSep,
+        setGlobalFilter,
+        setColumnFilters,
+        setColumnVisibility,
+        setSorting,
+        setAdvancedFilters,
+        setPageSize,
+        loadText,
+        clearData,
+    } = useCsvViewerStore()
+
+    // ── Ephemeral (not persisted) ────────────────────────────────────────────
     const [inputTab, setInputTab] = useState("drop")
     const [pasteText, setPasteText] = useState("")
-    const [separator, setSeparator] = useState(",")
-    const [customSep, setCustomSep] = useState("")
     const [isDragging, setIsDragging] = useState(false)
-    const [fileName, setFileName] = useState<string | null>(null)
-    const [rawText, setRawText] = useState("")
-    const [globalFilter, setGlobalFilter] = useState("")
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-    const [advancedFilters, setAdvancedFilters] = useState(false)
-    const [sorting, setSorting] = useState<SortingState>([])
-    const [pageSize, setPageSize] = useState(25)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const effectiveSep = separator === "custom" ? (customSep || ",") : separator
 
     const { headers, rows } = useMemo(() => parseCsv(rawText, effectiveSep), [rawText, effectiveSep])
 
-    // Build columns dynamically – give each column a fixed min-width so the
-    // sticky header cells don't collapse/misalign on horizontal scroll
+    // ── Build columns ────────────────────────────────────────────────────────
     const columns = useMemo<ColumnDef<CsvRow>[]>(
         () =>
             headers.map((h) => ({
@@ -151,14 +166,29 @@ export default function CsvViewer() {
         [headers]
     )
 
+    // ── Tanstack table ───────────────────────────────────────────────────────
     const table = useReactTable({
         data: rows,
         columns,
-        state: { globalFilter, columnFilters, columnVisibility, sorting },
+        state: {
+            globalFilter,
+            columnFilters: columnFilters as ColumnFiltersState,
+            columnVisibility: columnVisibility as VisibilityState,
+            sorting: sorting as SortingState,
+        },
         onGlobalFilterChange: setGlobalFilter,
-        onColumnFiltersChange: setColumnFilters,
-        onColumnVisibilityChange: setColumnVisibility,
-        onSortingChange: setSorting,
+        onColumnFiltersChange: (updater) => {
+            const next = typeof updater === "function" ? updater(columnFilters as ColumnFiltersState) : updater
+            setColumnFilters(next)
+        },
+        onColumnVisibilityChange: (updater) => {
+            const next = typeof updater === "function" ? updater(columnVisibility as VisibilityState) : updater
+            setColumnVisibility(next)
+        },
+        onSortingChange: (updater) => {
+            const next = typeof updater === "function" ? updater(sorting as SortingState) : updater
+            setSorting(next)
+        },
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         getSortedRowModel: getSortedRowModel(),
@@ -167,18 +197,10 @@ export default function CsvViewer() {
         globalFilterFn: "includesString",
     })
 
-    // Sync pageSize into table
+    // Sync pageSize into table when it changes
     useMemo(() => { table.setPageSize(pageSize) }, [pageSize])
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const loadText = (text: string, name?: string) => {
-        setRawText(text)
-        if (name) setFileName(name)
-        setColumnVisibility({})
-        setColumnFilters([])
-        setGlobalFilter("")
-    }
-
     const handleFile = (file: File) => {
         const reader = new FileReader()
         reader.onload = (e) => loadText(e.target?.result as string, file.name)
@@ -195,17 +217,7 @@ export default function CsvViewer() {
     const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
     const onDragLeave = () => setIsDragging(false)
 
-    const clearData = () => {
-        setRawText("")
-        setFileName(null)
-        setPasteText("")
-        setColumnVisibility({})
-        setColumnFilters([])
-        setGlobalFilter("")
-    }
-
     const hasData = rows.length > 0
-
     const filteredCount = table.getFilteredRowModel().rows.length
 
     return (
